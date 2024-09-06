@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description:
+  An EC2 instance, in a security group, in a public subnet within a VPC. 
+
+Resources:
+  # Creating a VPC
+  MyVPC: # This is the ID/name your VPC gets in the "Resources"-tab in your CloudFormation stack. Not the same as the name of the VPC (which is set in "Tags"). 
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 192.168.0.0/16
+      Tags: # This is how you name your VPC
+        - Key: Name
+          Value: TheVPC
+
+  # Creating a subnet that is within the VPC
+  MySubnet: 
+    Type: AWS::EC2::Subnet
+    Properties: 
+      VpcId: !Ref MyVPC
+      CidrBlock: 192.168.1.0/24 # This must be within the range of the CidrBlock defined in the relevant VPC. 
+      Tags:
+      - Key: Name
+        Value: TheSubnet
+
+  # Creating a route table that is within the VPC
+  MyRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+      - Key: Name
+        Value: TheRouteTable
+
+  # Creating an association between MyRouteTable and MySubnet
+  MyRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref MyRouteTable
+      SubnetId: !Ref MySubnet
