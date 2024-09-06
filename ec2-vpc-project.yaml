@@ -4,37 +4,96 @@ Description:
   An EC2 instance, in a security group, in a public subnet within a VPC. 
 
 Resources:
-  # Creating a VPC
+  # Creating a VPC.
   MyVPC: # This is the ID/name your VPC gets in the "Resources"-tab in your CloudFormation stack. Not the same as the name of the VPC (which is set in "Tags"). 
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: 192.168.0.0/16
-      Tags: # This is how you name your VPC
+      Tags: # This is how you name your VPC.
         - Key: Name
           Value: TheVPC
 
-  # Creating a subnet that is within the VPC
-  MySubnet: 
+  # Creating a subnet that is within the VPC.
+  MyPublicSubnet: 
     Type: AWS::EC2::Subnet
     Properties: 
       VpcId: !Ref MyVPC
-      CidrBlock: 192.168.1.0/24 # This must be within the range of the CidrBlock defined in the relevant VPC. 
+      CidrBlock: 192.168.0.0/24 # This must be within the range of the CidrBlock defined in the relevant VPC. I had 192.168.1.0/24 here and this resulted in the EC2 instance not having a public IP address. 
+      MapPublicIpOnLaunch: true
       Tags:
-      - Key: Name
-        Value: TheSubnet
+        - Key: Name
+          Value: TheSubnet
 
-  # Creating a route table that is within the VPC
+  # Creating a route table that is within the VPC.
   MyRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MyVPC
       Tags:
-      - Key: Name
-        Value: TheRouteTable
+        - Key: Name
+          Value: TheRouteTable
 
-  # Creating an association between MyRouteTable and MySubnet
+  # Creating an association between MyRouteTable and MySubnet.
   MyRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref MyRouteTable
-      SubnetId: !Ref MySubnet
+      SubnetId: !Ref MyPublicSubnet
+
+  # Creating an internet gateway. An internet gateway acts as a bridge between the VPC and the public internet. 
+  MyInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: TheInternetGateway
+  
+  # Attaching the internet gateway to the VPC. 
+  MyInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      InternetGatewayId: !Ref MyInternetGateway
+      VpcId: !Ref MyVPC
+
+  # In order for a subnet in the VPC to be able to access the public internet, it must have a route table with a route with a destination CidrBlock 0.0.0.0/0 (ALL IP addresses: the public internet ). 
+  # This route must be attached to the internet gateway. 
+
+  # Adding a route to the route table for internet access using the internet gateway.
+  MyInternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn:
+      - MyInternetGatewayAttachment
+    Properties:
+      GatewayId: !Ref MyInternetGateway
+      RouteTableId: !Ref MyRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+
+  # Creating an EC2 instance
+  MyEC2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn: 
+      - MyPublicSubnet
+      - MyRouteTableAssociation
+    Properties:
+      ImageId: ami-0de02246788e4a354
+      InstanceType: t2.micro
+      SubnetId: !Ref MyPublicSubnet
+      SecurityGroupIds:
+        - !Ref MySecurityGroup
+      Tags:
+        - Key: Name
+          Value: TheEC2Instance
+        - Key: Project
+          Value: EC2 Instance within a security group that has access to the public internet
+
+  # Creating a security group in which the EC2 instance will be placed
+  MySecurityGroup: 
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for EC2 instance
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress: 
+        - CidrIp: 0.0.0.0/0
+          IpProtocol: icmp 
+          FromPort: -1
+          ToPort: -1
